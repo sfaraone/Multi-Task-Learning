@@ -1,0 +1,173 @@
+# Import Tensorflow
+import Tensorflow as tf
+# From: http://www.kdnuggets.com/2016/07/multi-task-learning-tensorflow-part-1.html/2
+# ======================
+# Define the Graph
+# ======================
+
+# Define the Placeholders
+X = tf.placeholder("float", [10, 10], name="X")
+Y1 = tf.placeholder("float", [10, 1], name="Y1")
+Y2 = tf.placeholder("float", [10, 1], name="Y2")
+
+# Define the weights for the layers
+shared_layer_weights = tf.Variable([10,20], name="share_W")
+Y1_layer_weights = tf.Variable([20,1], name="share_Y1")
+Y2_layer_weights = tf.Variable([20,1], name="share_Y2")
+
+# Construct the Layers with RELU Activations
+shared_layer = tf.nn.relu(tf.matmul(X,shared_layer_weights))
+Y1_layer = tf.nn.relu(tf.matmul(shared_layer,Y1_layer_weights))
+Y2_layer_weights = tf.nn.relu(tf.matmul(shared_layer,Y2_layer_weights))
+
+# Calculate Loss
+Y1_Loss = tf.nn.l2_loss(Y1,Y1_layer)
+Y2_Loss = tf.nn.l2_loss(Y2,Y2_layer
+
+Alternate Training
+ 
+The first solution is particularly suited to situations where you’ll have a batch of Task 1 data and then a batch of Task 2 data.
+
+Remember that Tensorflow automatically figures out which calculations are needed for the operation you requested, and only conducts those calculations. This means that if we define an optimiser on only one of the tasks, it will only train the parameters required to compute that task - and will leave the rest alone. Since Task 1 relies only on the Task 1 and Shared Layers, the Task 2 layer will be untouched. Let’s draw another diagram with the desired optimisers at the end of each task.
+
+
+#  GRAPH CODE
+# ============
+
+# Import Tensorflow and Numpy
+import Tensorflow as tf
+import numpy as np
+
+# ======================
+# Define the Graph
+# ======================
+
+# Define the Placeholders
+X = tf.placeholder("float", [10, 10], name="X")
+Y1 = tf.placeholder("float", [10, 20], name="Y1")
+Y2 = tf.placeholder("float", [10, 20], name="Y2")
+
+# Define the weights for the layers
+
+initial_shared_layer_weights = np.random.rand(10,20)
+initial_Y1_layer_weights = np.random.rand(20,20)
+initial_Y2_layer_weights = np.random.rand(20,20)
+
+shared_layer_weights = tf.Variable(initial_shared_layer_weights, name="share_W", dtype="float32")
+Y1_layer_weights = tf.Variable(initial_Y1_layer_weights, name="share_Y1", dtype="float32")
+Y2_layer_weights = tf.Variable(initial_Y2_layer_weights, name="share_Y2", dtype="float32")
+
+# Construct the Layers with RELU Activations
+shared_layer = tf.nn.relu(tf.matmul(X,shared_layer_weights))
+Y1_layer = tf.nn.relu(tf.matmul(shared_layer,Y1_layer_weights))
+Y2_layer = tf.nn.relu(tf.matmul(shared_layer,Y2_layer_weights))
+
+# Calculate Loss
+Y1_Loss = tf.nn.l2_loss(Y1-Y1_layer)
+Y2_Loss = tf.nn.l2_loss(Y2-Y2_layer)
+
+# optimisers
+Y1_op = tf.train.AdamOptimizer().minimize(Y1_Loss)
+Y2_op = tf.train.AdamOptimizer().minimize(Y2_Loss)
+
+We can conduct Multi-Task learning by alternately calling each task optimiser, which means we can continually transfer some of the information from each task to the other. In a loose sense, we are discovering the ‘commonality’ between the tasks. The following code implements this for our easy example. If you are following along, paste this at the bottom of the previous code:
+
+
+# Calculation (Session) Code
+# ==========================
+
+# open the session
+
+with tf.Session() as session:
+    session.run(tf.initialize_all_variables())
+    for iters in range(10):
+        if np.random.rand() < 0.5:
+            _, Y1_loss = session.run([Y1_op, Y1_Loss],
+                            {
+                              X: np.random.rand(10,10)*10,
+                              Y1: np.random.rand(10,20)*10,
+                              Y2: np.random.rand(10,20)*10
+                              })
+            print(Y1_loss)
+        else:
+            _, Y2_loss = session.run([Y2_op, Y2_Loss],
+                            {
+                              X: np.random.rand(10,10)*10,
+                              Y1: np.random.rand(10,20)*10,
+                              Y2: np.random.rand(10,20)*10
+                              })
+            print(Y2_loss)
+
+Tips: When is Alternate Training Good?
+
+Alternate training is a good idea when you have two different datasets for each of the different tasks (for example, translating from English to French and English to German). By designing a network in this way, you can improve the performance of each of your individual tasks without having to find more task-specific training data.
+
+Alternate training is the most common situation you’ll find yourself in, because there aren’t that many datasets that have two or more outputs. We’ll come on to one example, but the clearest examples are where you want to build hierarchy into your tasks. For example, in vision, you might want one of your tasks to predict the rotation of an object, the other what the object would look like if you changed the camera angle. These two tasks are obviously related - in fact the rotation probably comes before the image generation.
+
+Tips: When is Alternate Training Less Good?
+
+Alternate training can easily become biased towards a specific task. The first way is obvious - if one of your tasks has a far larger dataset than the other, then if you train in proportion to the dataset sizes your shared layer will contain more information about the more significant task.
+
+The second is less so. If you train alternately, the final task in your model will create a bias in the parameters. There isn’t any obvious way that you can overcome this problem, but it does mean that in circumstances where you don’t have to train alternately, you shouldn’t.
+
+Training at the Same Time - Joint Training
+ 
+When you have a dataset with multiple labels for each input, what you really want is to train the tasks at the same time. The question is, how do you preserve the independence of the task-specific functions? The answer is surprisingly simple - you just add up the loss functions of the individual tasks and optimise on that. Below is a diagram that shows a network that can train jointly, with the accompanying code:
+
+#  GRAPH CODE
+# ============
+
+# Import Tensorflow and Numpy
+import Tensorflow as tf
+import numpy as np
+
+# ======================
+# Define the Graph
+# ======================
+
+# Define the Placeholders
+X = tf.placeholder("float", [10, 10], name="X")
+Y1 = tf.placeholder("float", [10, 20], name="Y1")
+Y2 = tf.placeholder("float", [10, 20], name="Y2")
+
+# Define the weights for the layers
+
+initial_shared_layer_weights = np.random.rand(10,20)
+initial_Y1_layer_weights = np.random.rand(20,20)
+initial_Y2_layer_weights = np.random.rand(20,20)
+
+shared_layer_weights = tf.Variable(initial_shared_layer_weights, name="share_W", dtype="float32")
+Y1_layer_weights = tf.Variable(initial_Y1_layer_weights, name="share_Y1", dtype="float32")
+Y2_layer_weights = tf.Variable(initial_Y2_layer_weights, name="share_Y2", dtype="float32")
+
+# Construct the Layers with RELU Activations
+shared_layer = tf.nn.relu(tf.matmul(X,shared_layer_weights))
+Y1_layer = tf.nn.relu(tf.matmul(shared_layer,Y1_layer_weights))
+Y2_layer = tf.nn.relu(tf.matmul(shared_layer,Y2_layer_weights))
+
+# Calculate Loss
+Y1_Loss = tf.nn.l2_loss(Y1-Y1_layer)
+Y2_Loss = tf.nn.l2_loss(Y2-Y2_layer)
+Joint_Loss = Y1_Loss + Y2_Loss
+
+# optimisers
+Optimiser = tf.train.AdamOptimizer().minimize(Joint_Loss)
+Y1_op = tf.train.AdamOptimizer().minimize(Y1_Loss)
+Y2_op = tf.train.AdamOptimizer().minimize(Y2_Loss)
+
+# Joint Training
+# Calculation (Session) Code
+# ==========================
+
+# open the session
+
+with tf.Session() as session:
+    session.run(tf.initialize_all_variables())
+    _, Joint_Loss = session.run([Optimiser, Joint_Loss],
+                    {
+                      X: np.random.rand(10,10)*10,
+                      Y1: np.random.rand(10,20)*10,
+                      Y2: np.random.rand(10,20)*10
+                      })
+    print(Joint_Loss)
+
